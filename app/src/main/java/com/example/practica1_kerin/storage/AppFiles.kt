@@ -10,6 +10,17 @@ import java.util.Locale
         fun audioFile(context: Context): File =
             File(context.filesDir, "grabacion.m4a")
 
+        fun newAudioFile(context: Context): File {
+            val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+            return File(context.filesDir, "audio_$ts.m4a")
+        }
+
+        fun getAudioFiles(context: Context): List<File> {
+            return context.filesDir.listFiles { file ->
+                file.name.startsWith("audio_") && file.name.endsWith(".m4a")
+            }?.toList() ?: emptyList()
+        }
+
         fun latestPhotoFile(context: Context): File =
             File(context.filesDir, "ultima_foto.jpg")
 

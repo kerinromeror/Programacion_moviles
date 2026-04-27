@@ -19,12 +19,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.LaunchedEffect
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import com.example.practica1_kerin.media.SimpleAudioRecorder
 import com.example.practica1_kerin.storage.AppFiles
 @Composable
 fun AudioScreen(){
     val context = LocalContext.current
-    val audioFile = remember { AppFiles.audioFile(context) }
+    var audioFiles by remember { mutableStateOf(AppFiles.getAudioFiles(context)) }
+    var selectedFile by remember { mutableStateOf<java.io.File?>(null) }
 
     val (hasAudioPerm, requestAudioPerm) = rememberAudioPermission()
 
@@ -32,6 +42,10 @@ fun AudioScreen(){
 
     val player = remember { SimpleAudioPlayer() }
     val recoder = remember { SimpleAudioRecorder() }
+
+    fun refreshFiles() {
+        audioFiles = AppFiles.getAudioFiles(context)
+    }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -41,56 +55,82 @@ fun AudioScreen(){
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        modifier = Modifier.fillMaxSize().padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text("Audio - Grabar y reproducir")
+        Text("Audio - Grabar y reproducir", style = MaterialTheme.typography.bodyMedium)
         Text("Permiso microfono: ${if (hasAudioPerm) "OK" else "NO"}")
-        Text("Archivo: ${audioFile.name} (${if (audioFile.exists()) "existe" else "no existe"})")
-        Text("Estado : {$status}")
+        Text("Estado : $status")
 
         if(!hasAudioPerm){
             Button(onClick = requestAudioPerm) { Text("Pedir permiso de microfono") }
         }else{
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = {
+                    val newFile = AppFiles.newAudioFile(context)
                     player.stop()
-                    recoder.start(audioFile){status = it}
-                    status = "Grabando ..."
+                    recoder.start(newFile){status = it}
+                    status = "Grabando en ${newFile.name}..."
                 },
                     enabled = !recoder.isRecording()) {
-                    Text("REC")
+                    Text("NUEVA REC")
                 }
 
                 Button(
                     onClick = {
                         recoder.stop()
                         status = "Grabación guardada"
+                        refreshFiles()
                     }, enabled = recoder.isRecording()
                 ) { Text("STOP REC")}
             }
 
-            Spacer(Modifier.height(8.dp))
+            HorizontalDivider()
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Text("Audios Guardados:", style = MaterialTheme.typography.titleMedium)
+
+            LazyColumn(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Button(onClick = {
-                    status = "Preparando..."
-                    player.prepareFromFile(
-                        file = audioFile,
-                        onCompleted = {status = "Terminado"},
-                        onError = {status = it}
-                    )
-                }) {Text("Preparar") }
-                Button(onClick = {
-                    player.play { status = it }
-                    if (status == "Preparado") status = "Reproduciendo..."
-                }) {Text("Play") }
-                Button(onClick = {player.pause(); status = "Pausado"}) {Text(("Pause")) }
-                Button(onClick = {player.stop(); status = "Parado"}) {Text("Stop") }
+                items(audioFiles.withIndex().toList()) { (index, file) ->
+                    val sdf = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault())
+                    val dateStr = sdf.format(Date(file.lastModified()))
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp)
+                    ) {
+                        Text("ID: $index", style = MaterialTheme.typography.labelSmall)
+                        Text("Nombre: ${file.name}", style = MaterialTheme.typography.bodyLarge)
+                        Text("Ruta: ${file.parent}", style = MaterialTheme.typography.labelMedium)
+                        Text("Fecha: $dateStr", style = MaterialTheme.typography.bodySmall)
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = {
+                                selectedFile = file
+                                status = "Preparando ${file.name}..."
+                                player.prepareFromFile(
+                                    file = file,
+                                    onCompleted = {status = "Listo para reproducir"},
+                                    onError = {status = it}
+                                )
+                            }) { Text("Seleccionar") }
+
+                            if (selectedFile == file) {
+                                Button(onClick = {
+                                    player.play { status = it }
+                                    status = "Reproduciendo..."
+                                }) { Text("Play") }
+                                Button(onClick = { player.pause(); status = "Pausado" }) { Text("Pause") }
+                                Button(onClick = { player.stop(); status = "Parado" }) { Text("Stop") }
+                            }
+                        }
+                        HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
+                    }
+                }
             }
         }
     }
-
 }
